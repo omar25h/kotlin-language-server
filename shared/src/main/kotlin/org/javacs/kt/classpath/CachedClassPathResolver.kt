@@ -12,11 +12,11 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Path
 import java.nio.file.Paths
 
-private const val MAX_PATH_LENGTH = 255
+private const val MAX_PATH_LENGTH = 2047
 
 private object ClassPathMetadataCache : IntIdTable() {
     val includesSources = bool("includessources")
-    val buildFileVersion = long("buidlfileversion").nullable()
+    val buildFileVersion = long("buildfileversion").nullable()
 }
 
 private object ClassPathCacheEntry : IntIdTable() {
@@ -60,7 +60,7 @@ internal class CachedClassPathResolver(
             ClassPathCacheEntryEntity.all().map {
                 ClassPathEntry(
                     compiledJar = Paths.get(it.compiledJar),
-                    sourceJar = if (it.sourceJar != null) Paths.get(it.sourceJar) else null
+                    sourceJar = it.sourceJar?.let(Paths::get)
                 )
             }.toSet()
         }
@@ -69,7 +69,7 @@ internal class CachedClassPathResolver(
             newEntries.map {
                 ClassPathCacheEntryEntity.new {
                     compiledJar = it.compiledJar.toString()
-                    sourceJar = it.sourceJar.toString()
+                    sourceJar = it.sourceJar?.toString()
                 }
             }
         }

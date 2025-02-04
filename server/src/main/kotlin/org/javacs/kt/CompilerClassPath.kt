@@ -15,7 +15,12 @@ import java.nio.file.Path
  * Manages the class path (compiled JARs, etc), the Java source path
  * and the compiler. Note that Kotlin sources are stored in SourcePath.
  */
-class CompilerClassPath(private val config: CompilerConfiguration, private val databaseService: DatabaseService) : Closeable {
+class CompilerClassPath(
+    private val config: CompilerConfiguration,
+    private val scriptsConfig: ScriptsConfiguration,
+    private val codegenConfig: CodegenConfiguration,
+    private val databaseService: DatabaseService
+) : Closeable {
     val workspaceRoots = mutableSetOf<Path>()
 
     private val javaSourcePath = mutableSetOf<Path>()
@@ -24,7 +29,14 @@ class CompilerClassPath(private val config: CompilerConfiguration, private val d
     val outputDirectory: File = Files.createTempDirectory("klsBuildOutput").toFile()
     val javaHome: String? = System.getProperty("java.home", null)
 
-    var compiler = Compiler(javaSourcePath, classPath.map { it.compiledJar }.toSet(), buildScriptClassPath, outputDirectory)
+    var compiler = Compiler(
+        javaSourcePath,
+        classPath.map { it.compiledJar }.toSet(),
+        buildScriptClassPath,
+        scriptsConfig,
+        codegenConfig,
+        outputDirectory
+    )
         private set
 
     private val async = AsyncExecutor()
@@ -72,7 +84,14 @@ class CompilerClassPath(private val config: CompilerConfiguration, private val d
         if (refreshCompiler) {
             LOG.info("Reinstantiating compiler")
             compiler.close()
-            compiler = Compiler(javaSourcePath, classPath.map { it.compiledJar }.toSet(), buildScriptClassPath, outputDirectory)
+            compiler = Compiler(
+                javaSourcePath,
+                classPath.map { it.compiledJar }.toSet(),
+                buildScriptClassPath,
+                scriptsConfig,
+                codegenConfig,
+                outputDirectory
+            )
             updateCompilerConfiguration()
         }
 
@@ -141,18 +160,18 @@ class CompilerClassPath(private val config: CompilerConfiguration, private val d
 
     private fun isBuildScript(file: Path): Boolean = file.fileName.toString().let { it == "pom.xml" || it == "build.gradle" || it == "build.gradle.kts" }
 
+    private fun findJavaSourceFiles(root: Path): Set<Path> {
+        val sourceMatcher = FileSystems.getDefault().getPathMatcher("glob:*.java")
+        return SourceExclusions(listOf(root), scriptsConfig)
+            .walkIncluded()
+            .filter { sourceMatcher.matches(it.fileName) }
+            .toSet()
+    }
+
     override fun close() {
         compiler.close()
         outputDirectory.delete()
     }
-}
-
-private fun findJavaSourceFiles(root: Path): Set<Path> {
-    val sourceMatcher = FileSystems.getDefault().getPathMatcher("glob:*.java")
-    return SourceExclusions(root)
-        .walkIncluded()
-        .filter { sourceMatcher.matches(it.fileName) }
-        .toSet()
 }
 
 private fun logAdded(sources: Collection<Path>, name: String) {

@@ -1,18 +1,23 @@
 package org.javacs.kt.classpath
 
-import org.javacs.kt.util.userHome
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
+import org.javacs.kt.util.KotlinLSException
+import org.javacs.kt.util.userHome
 
+private fun createPathOrNull(envVar: String): Path? = System.getenv(envVar)?.let(Paths::get)
 
-internal val gradleHome =
-    System.getenv("GRADLE_USER_HOME")?.let { Paths.get(it) }
-        ?: userHome.resolve(".gradle")
+private val possibleMavenRepositoryPaths =
+    sequenceOf(
+        createPathOrNull("MAVEN_REPOSITORY"),
+        createPathOrNull("MAVEN_HOME")?.let { it.resolve("repository") },
+        createPathOrNull("M2_HOME")?.let { it.resolve("repository") },
+        userHome.resolve(".m2/repository"),
+    )
+    .filterNotNull()
 
-internal val mavenHome =
-    System.getenv("MAVEN_HOME")?.let { Paths.get(it) }
-        ?: System.getenv("M2_HOME")?.let { Paths.get(it) }
-        ?: userHome.resolve(".m2")
+internal val mavenRepository: Path? =
+    possibleMavenRepositoryPaths.firstOrNull { Files.exists(it) }
 
-internal val mavenRepository =
-    System.getenv("MAVEN_REPOSITORY")?.let { Paths.get(it) }
-        ?: mavenHome.resolve("repository")
+internal val gradleHome = createPathOrNull("GRADLE_USER_HOME") ?: userHome.resolve(".gradle")

@@ -7,9 +7,8 @@ import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.jetbrains.kotlin.psi.psiUtil.parentsWithSelf
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.javacs.kt.compiler.Compiler
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Test
-import org.junit.After
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import java.io.File
@@ -30,11 +29,18 @@ private class FileToEdit {
         @JvmStatic @BeforeClass fun setup() {
             LOG.connectStdioBackend()
             outputDirectory = Files.createTempDirectory("klsBuildOutput").toFile()
-            compiler = Compiler(setOf(), setOf(), outputDirectory = outputDirectory)
+            compiler = Compiler(
+                javaSourcePath = setOf(),
+                classPath = setOf(),
+                scriptsConfig = ScriptsConfiguration(),
+                codegenConfig = CodegenConfiguration(),
+                outputDirectory = outputDirectory
+            )
         }
 
         @JvmStatic @AfterClass
         fun tearDown() {
+            compiler.close()
             outputDirectory.delete()
         }
     }
@@ -83,14 +89,10 @@ private class FileToEdit {
         val function = original.findElementAt(49)!!.parentsWithSelf.filterIsInstance<KtNamedFunction>().first()
         val scope = context.get(BindingContext.LEXICAL_SCOPE, function.bodyExpression)!!
         val recompile = compiler.createKtDeclaration("""private fun singleExpressionFunction() = intFunction()""")
-        val (recompileContext, _) = compiler.compileKtExpression(recompile, scope, setOf(original))
+        val (recompileContext, _) = compiler.compileKtExpression(recompile, scope, setOf(original))!!
         val intFunctionRef = recompile.findElementAt(41)!!.parentsWithSelf.filterIsInstance<KtReferenceExpression>().first()
         val target = recompileContext.get(BindingContext.REFERENCE_TARGET, intFunctionRef)!!
 
         assertThat(target.name, hasToString("intFunction"))
-    }
-
-    @After fun cleanUp() {
-        compiler.close()
     }
 }
